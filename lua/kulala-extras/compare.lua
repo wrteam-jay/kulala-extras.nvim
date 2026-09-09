@@ -69,10 +69,12 @@ function M.diff(key, index_a, index_b)
   vim.api.nvim_win_set_buf(0, buf_a)
   vim.opt_local.diffopt:append({ "iwhite", "linematch:60" })
   vim.cmd("diffthis")
+  vim.cmd("normal! zR") -- diffthis folds unchanged regions by default (foldmethod=diff) - open them, these bodies are short enough that folding just adds a step
   vim.cmd("vsplit")
   vim.api.nvim_win_set_buf(0, buf_b)
   vim.opt_local.diffopt:append({ "iwhite", "linematch:60" })
   vim.cmd("diffthis")
+  vim.cmd("normal! zR")
 
   local hunks = count_diff_hunks(lines_a, lines_b)
   vim.notify(

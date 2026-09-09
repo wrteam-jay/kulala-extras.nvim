@@ -15,6 +15,17 @@ vim.api.nvim_create_user_command("KulalaExtrasOpenHere", function()
   require("kulala-extras.virtual_text").open_here()
 end, { desc = "Pick one past response for the request under the cursor, open it in a side split" })
 
+vim.api.nvim_create_user_command("KulalaExtrasClearHistoryHere", function()
+  require("kulala-extras.virtual_text").clear_here()
+end, { desc = "Clear history for the request under the cursor" })
+
+vim.api.nvim_create_user_command("KulalaExtrasClearHistory", function()
+  local choice = vim.fn.confirm("Clear ALL kulala-extras history, every request?", "&Yes\n&No", 2)
+  if choice == 1 then
+    require("kulala-extras.virtual_text").clear_all()
+  end
+end, { desc = "Clear all recorded history, every request" })
+
 -- curl-to-.http import is handled by kulala.nvim itself (require("kulala").from_curl()) -
 -- no need to duplicate that parser here.
 

@@ -3,13 +3,19 @@ local config = require("kulala-extras.config")
 local M = {}
 
 --- Derives a stable key for a request so history entries group correctly.
+--- Scoped by the `.http` file too (`response.file`), not just method+url -
+--- two different projects hitting the same URL (e.g. a shared local dev
+--- health-check endpoint) would otherwise share one history file.
 --- @param response table full response record, see kulala's
----   lua/kulala/cmd/init.lua (response.url/.method/.name)
+---   lua/kulala/cmd/init.lua (response.url/.method/.name/.file)
 --- @return string
 function M.key_for(response)
   local url = response.url or "unknown-url"
   local method = response.method or "GET"
-  return (method .. " " .. url):gsub("[^%w]", "_")
+  -- hash the file path rather than inlining it - full absolute paths would
+  -- make history filenames unreasonably long
+  local file_hash = vim.fn.sha256(response.file or ""):sub(1, 8)
+  return file_hash .. "_" .. (method .. "_" .. url):gsub("[^%w]", "_")
 end
 
 --- @param key string
@@ -71,6 +77,7 @@ function M.record(payload)
     buf = response.buf,
     line = response.line,
     name = response.name,
+    file = response.file,
   }
   table.insert(entries, 1, entry)
 
@@ -95,6 +102,26 @@ function M.list_keys()
     table.insert(keys, vim.fn.fnamemodify(path, ":t:r"))
   end
   return keys
+end
+
+--- Deletes one request's history file.
+--- @param key string
+function M.clear(key)
+  local file = history_file(key)
+  if vim.fn.filereadable(file) == 1 then
+    vim.fn.delete(file)
+  end
+end
+
+--- Deletes all recorded history, every key.
+--- @return integer count of files removed
+function M.clear_all()
+  local n = 0
+  for _, path in ipairs(vim.fn.glob(config.options.history_dir .. "/*.json", true, true)) do
+    vim.fn.delete(path)
+    n = n + 1
+  end
+  return n
 end
 
 return M

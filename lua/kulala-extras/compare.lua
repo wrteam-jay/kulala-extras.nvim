@@ -2,6 +2,13 @@ local history = require("kulala-extras.history")
 
 local M = {}
 
+--- Number of lines format_entry() always prepends before the diffable
+--- content (the "# <timestamp> (status ...)" line + a blank line). These
+--- always differ between two entries just because the timestamps differ,
+--- so callers computing a difference *count* must skip them - see
+--- count_diff_hunks().
+local METADATA_LINES = 2
+
 --- @param entry table history entry, see history.record()
 --- @return string[] lines, boolean is_json
 local function format_entry(entry)
@@ -11,8 +18,14 @@ local function format_entry(entry)
   }
   if entry.headers then
     -- kulala's headers_tbl values are lists (a header can repeat), e.g.
-    -- { ["cache-control"] = { "no-cache", "private" } }
-    for k, v in pairs(entry.headers) do
+    -- { ["cache-control"] = { "no-cache", "private" } }. Sort keys so
+    -- identical header sets always render in the same order - table
+    -- iteration order is otherwise undefined and would show up as a
+    -- spurious diff between two byte-identical responses.
+    local keys = vim.tbl_keys(entry.headers)
+    table.sort(keys)
+    for _, k in ipairs(keys) do
+      local v = entry.headers[k]
       local value = type(v) == "table" and table.concat(v, ", ") or tostring(v)
       table.insert(lines, ("%s: %s"):format(k, value))
     end
@@ -41,9 +54,18 @@ local function make_diff_buf(lines, is_json)
   return buf
 end
 
---- @return integer count of diff hunks between two line arrays
+--- @param lines string[] a full format_entry() result, metadata line included
+--- @return string[] the same lines minus the leading timestamp/blank line
+local function without_metadata(lines)
+  return { table.unpack(lines, METADATA_LINES + 1) }
+end
+
+--- @return integer count of diff hunks between two entries' diffable
+---   content - the timestamp line is deliberately excluded (see
+---   METADATA_LINES), it always differs and isn't a real difference
 local function count_diff_hunks(lines_a, lines_b)
-  local diff = vim.diff(table.concat(lines_a, "\n") .. "\n", table.concat(lines_b, "\n") .. "\n", {
+  local a, b = without_metadata(lines_a), without_metadata(lines_b)
+  local diff = vim.diff(table.concat(a, "\n") .. "\n", table.concat(b, "\n") .. "\n", {
     result_type = "indices",
     algorithm = "histogram",
   })

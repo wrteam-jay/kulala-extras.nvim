@@ -6,6 +6,7 @@ CONTENTS                                                *kulala-extras-contents*
     1. Introduction ......................... |kulala-extras-introduction|
     2. Setup ................................. |kulala-extras-setup|
     3. Commands ............................. |kulala-extras-commands|
+    4. Sign column ............................. |kulala-extras-signs|
 
 ==============================================================================
 1. Introduction                                     *kulala-extras-introduction*
@@ -41,8 +42,24 @@ public `require("kulala.api").on("after_request", ...)` hook.
                              responses, and diff them in a native Neovim
                              diff split.
 
+                                          *:KulalaExtrasClearHistoryHere*
+:KulalaExtrasClearHistoryHere  Clear history for the request under the
+                                cursor.
+
+                                              *:KulalaExtrasClearHistory*
+:KulalaExtrasClearHistory   Clear all recorded history, every request.
+                             Asks for confirmation first.
+
                                                 *:KulalaExtrasDebugPayload*
 :KulalaExtrasDebugPayload   One-shot: print the raw `after_request`
                              payload of the next response you run.
+
+==============================================================================
+4. Sign column                                       *kulala-extras-signs*
+
+A dim `|` marks every request in the buffer that has recorded history. A
+highlighted `>` tracks the cursor, showing which request the *Here
+commands above will act on. Requires 'signcolumn' to be visible - set
+automatically to "yes" on FileType http/rest.
 
  vim:tw=78:ts=8:ft=help:norl:

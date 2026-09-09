@@ -4,14 +4,24 @@ local compare = require("kulala-extras.compare")
 local M = {}
 
 local ns = vim.api.nvim_create_namespace("kulala_extras_history")
+local ns_signs = vim.api.nvim_create_namespace("kulala_extras_signs")
 
 --- How many recent runs to show inline under a request.
 local MAX_SHOWN = 5
 
---- registry[bufnr][line] = { key = string, extmark_id = integer }
---- `line` is 0-indexed: the last line of the request block, where the
---- history virt_lines are attached (see find_request_end_line()).
+--- registry[bufnr][end_line0] = { key, extmark_id, start_line0, sign_id }
+--- `start_line0`/`end_line0` are 0-indexed, bracketing the request block
+--- (`<method> <url>` line through its last header line). `sign_id` is the
+--- dim "has history" gutter marker at start_line0 - see render().
 local registry = {}
+
+--- active[bufnr] = { key, extmark_id } - the single highlighted ">" sign
+--- showing which request kulala-extras' keymaps currently target, kept in
+--- sync with the cursor by update_active_sign().
+local active = {}
+
+vim.api.nvim_set_hl(0, "KulalaExtrasHistorySign", { link = "Comment", default = true })
+vim.api.nvim_set_hl(0, "KulalaExtrasActiveSign", { link = "DiagnosticOk", default = true })
 
 --- @param entry table history entry, see history.record()
 --- @return string
@@ -29,10 +39,10 @@ end
 --- @param bufnr integer
 --- @param method string
 --- @param url string
---- @return integer|nil end_line0 0-indexed line to attach virt_lines below
-local function find_request_end_line(bufnr, method, url)
+--- @return integer|nil start_line0, integer|nil end_line0 both 0-indexed
+local function find_request_lines(bufnr, method, url)
   if not vim.api.nvim_buf_is_valid(bufnr) then
-    return nil
+    return nil, nil
   end
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local pattern = "^%s*" .. vim.pesc(method) .. "%s+" .. vim.pesc(url)
@@ -45,7 +55,7 @@ local function find_request_end_line(bufnr, method, url)
     end
   end
   if not start_line then
-    return nil
+    return nil, nil
   end
 
   local end_line = start_line
@@ -56,7 +66,24 @@ local function find_request_end_line(bufnr, method, url)
     end
     end_line = i
   end
-  return end_line - 1 -- 0-indexed
+  return start_line - 1, end_line - 1 -- 0-indexed
+end
+
+--- Removes any extmark previously registered for `key` in `bufnr`,
+--- wherever it currently sits (the request block may have moved).
+--- @param bufnr integer
+--- @param key string
+local function clear_registered(bufnr, key)
+  if not registry[bufnr] then
+    return
+  end
+  for line0, data in pairs(registry[bufnr]) do
+    if data.key == key then
+      pcall(vim.api.nvim_buf_del_extmark, bufnr, ns, data.extmark_id)
+      pcall(vim.api.nvim_buf_del_extmark, bufnr, ns_signs, data.sign_id)
+      registry[bufnr][line0] = nil
+    end
+  end
 end
 
 --- Renders (or re-renders) the history line under one request.
@@ -65,20 +92,15 @@ end
 --- @param method string
 --- @param url string
 function M.render(bufnr, key, method, url)
-  local end_line0 = find_request_end_line(bufnr, method, url)
+  local start_line0, end_line0 = find_request_lines(bufnr, method, url)
   if not end_line0 then
+    -- request text not found (buffer edited/request removed) - drop the
+    -- stale marker rather than leaving it pointing at wrong content
+    clear_registered(bufnr, key)
     return
   end
 
-  registry[bufnr] = registry[bufnr] or {}
-  -- clear any extmark previously registered for this key in this buffer,
-  -- wherever it was (the request block may have moved)
-  for line0, data in pairs(registry[bufnr]) do
-    if data.key == key then
-      pcall(vim.api.nvim_buf_del_extmark, bufnr, ns, data.extmark_id)
-      registry[bufnr][line0] = nil
-    end
-  end
+  clear_registered(bufnr, key)
 
   local entries = history.get(key)
   if #entries == 0 then
@@ -95,7 +117,62 @@ function M.render(bufnr, key, method, url)
     virt_lines_above = false,
   })
 
-  registry[bufnr][end_line0] = { key = key, extmark_id = extmark_id }
+  -- dim gutter marker on the request line itself: "this request has
+  -- recorded history" - independent of whether the cursor is on it, see
+  -- update_active_sign() for the highlighted "you are here" indicator
+  local sign_id = vim.api.nvim_buf_set_extmark(bufnr, ns_signs, start_line0, 0, {
+    sign_text = "│",
+    sign_hl_group = "KulalaExtrasHistorySign",
+  })
+
+  registry[bufnr] = registry[bufnr] or {}
+  registry[bufnr][end_line0] =
+    { key = key, extmark_id = extmark_id, start_line0 = start_line0, sign_id = sign_id }
+end
+
+--- Moves the highlighted ">" gutter sign to whichever request the cursor
+--- currently resolves to - the visual answer to "which request will
+--- :KulalaExtrasCompareHere / OpenHere / ClearHistoryHere act on". Only
+--- touches the sign when the resolved request actually changed, so this
+--- is cheap enough to call on every CursorMoved.
+--- @param bufnr integer
+function M.update_active_sign(bufnr)
+  local key = M.key_at_cursor(bufnr)
+  local current = active[bufnr]
+
+  if current and current.key == key then
+    return -- unchanged, nothing to redraw
+  end
+  if current then
+    pcall(vim.api.nvim_buf_del_extmark, bufnr, ns_signs, current.extmark_id)
+    active[bufnr] = nil
+  end
+  if not key then
+    return
+  end
+
+  local data = registry[bufnr] and registry[bufnr][M.end_line_for_key(bufnr, key)]
+  if not data then
+    return
+  end
+
+  local extmark_id = vim.api.nvim_buf_set_extmark(bufnr, ns_signs, data.start_line0, 0, {
+    sign_text = "▶",
+    sign_hl_group = "KulalaExtrasActiveSign",
+  })
+  active[bufnr] = { key = key, extmark_id = extmark_id }
+end
+
+--- @param bufnr integer
+--- @param key string
+--- @return integer|nil end_line0 the registry key (end line) for `key`, if any
+function M.end_line_for_key(bufnr, key)
+  for end_line0, data in pairs(registry[bufnr] or {}) do
+    if data.key == key then
+      return end_line0
+    end
+  end
+  return nil
 end
 
 --- Called from the after_request hook once a response has been recorded.
@@ -108,8 +185,27 @@ function M.on_record(key, entry)
   M.render(entry.buf, key, entry.method, entry.url)
 end
 
---- Finds the history key registered at or above the cursor in the current
---- buffer - i.e. the request the cursor is currently "inside".
+--- Renders every request in `bufnr` that already has persisted history,
+--- even if nothing has been run yet this session - otherwise reopening a
+--- `.http` file shows no markers until you rerun something.
+--- @param bufnr integer
+function M.render_buffer(bufnr)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+  local buf_name = vim.api.nvim_buf_get_name(bufnr)
+  for _, key in ipairs(history.list_keys()) do
+    local entries = history.get(key)
+    local latest = entries[1]
+    if latest and latest.file == buf_name and latest.method and latest.url then
+      M.render(bufnr, key, latest.method, latest.url)
+    end
+  end
+end
+
+--- Finds the history key for the request block the cursor is currently
+--- inside: the block whose start line is at-or-before the cursor, closest
+--- among those. A cursor above every request resolves to nothing.
 --- @param bufnr integer
 --- @return string|nil key
 function M.key_at_cursor(bufnr)
@@ -118,12 +214,10 @@ function M.key_at_cursor(bufnr)
     return nil
   end
   local cursor_line = vim.api.nvim_win_get_cursor(0)[1] - 1
-  local best_line, best_key = nil, nil
-  for line0, data in pairs(lines) do
-    -- the request whose block ends closest to (at or after) the cursor,
-    -- or the closest one above it if the cursor is past every block end
-    if best_line == nil or math.abs(line0 - cursor_line) < math.abs(best_line - cursor_line) then
-      best_line, best_key = line0, data.key
+  local best_start, best_key = nil, nil
+  for _, data in pairs(lines) do
+    if data.start_line0 <= cursor_line and (best_start == nil or data.start_line0 > best_start) then
+      best_start, best_key = data.start_line0, data.key
     end
   end
   return best_key
@@ -166,6 +260,40 @@ function M.open_here()
     end
     compare.open_single(key, idx)
   end)
+end
+
+--- Clears history + virtual text for the request under the cursor.
+function M.clear_here()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local key = M.key_at_cursor(bufnr)
+  if not key then
+    vim.notify("kulala-extras: no recorded history for a request at/above the cursor", vim.log.levels.WARN)
+    return
+  end
+  clear_registered(bufnr, key)
+  if active[bufnr] and active[bufnr].key == key then
+    pcall(vim.api.nvim_buf_del_extmark, bufnr, ns_signs, active[bufnr].extmark_id)
+    active[bufnr] = nil
+  end
+  history.clear(key)
+  vim.notify("kulala-extras: cleared history for this request", vim.log.levels.INFO)
+end
+
+--- Clears all history + virtual text, every request, every buffer.
+function M.clear_all()
+  for bufnr, lines in pairs(registry) do
+    for _, data in pairs(lines) do
+      pcall(vim.api.nvim_buf_del_extmark, bufnr, ns, data.extmark_id)
+      pcall(vim.api.nvim_buf_del_extmark, bufnr, ns_signs, data.sign_id)
+    end
+  end
+  for bufnr, data in pairs(active) do
+    pcall(vim.api.nvim_buf_del_extmark, bufnr, ns_signs, data.extmark_id)
+  end
+  registry = {}
+  active = {}
+  local n = history.clear_all()
+  vim.notify(("kulala-extras: cleared %d history file(s)"):format(n), vim.log.levels.INFO)
 end
 
 return M

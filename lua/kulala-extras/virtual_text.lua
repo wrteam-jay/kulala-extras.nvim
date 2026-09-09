@@ -310,6 +310,56 @@ function M.compare_here()
   compare.diff_latest(key)
 end
 
+--- Appends a historical entry into kulala's own response DB and opens
+--- kulala's native response view (the real Body/Headers/Verbose/Report
+--- window, same one a live request opens) pointed at it, rather than a
+--- separate view of our own.
+---
+--- This writes directly into kulala's live internal state
+--- (`kulala.db`'s `responses` array and `current_response_pos`), which
+--- is not a published/stable API - deliberately only ever *appends*
+--- (never overwrites or removes an existing entry), so a real request
+--- run afterwards is unaffected. Could still break silently on a future
+--- kulala.nvim update that changes that DB's shape - if this stops
+--- working, `compare.open_single()` (kulala-extras' own plain view) is
+--- the fallback.
+--- @param key string
+--- @param index integer 1-based index into history.get(key), newest first
+function M.open_in_kulala_ui(key, index)
+  local entries = history.get(key)
+  local entry = entries[index]
+  if not entry then
+    vim.notify("kulala-extras: no such history entry", vim.log.levels.WARN)
+    return
+  end
+  if not entry.raw then
+    vim.notify(
+      "kulala-extras: this entry predates raw-response storage, can't reopen it in kulala's UI - falling back",
+      vim.log.levels.WARN
+    )
+    return compare.open_single(key, index)
+  end
+
+  local db_ok, db_module = pcall(require, "kulala.db")
+  local ui_ok, ui = pcall(require, "kulala.ui")
+  if not (db_ok and ui_ok) then
+    vim.notify("kulala-extras: kulala.nvim not available", vim.log.levels.ERROR)
+    return
+  end
+
+  local ok, err = pcall(function()
+    local db = db_module.global_update()
+    db.responses = db.responses or {}
+    table.insert(db.responses, entry.raw)
+    db.current_response_pos = #db.responses
+    ui.open_default_view()
+  end)
+  if not ok then
+    vim.notify("kulala-extras: failed to open in kulala's UI (" .. tostring(err) .. "), falling back", vim.log.levels.WARN)
+    compare.open_single(key, index)
+  end
+end
+
 --- Browses history entries with a live preview (status/headers/body) via
 --- Snacks.picker, so you can see what a response actually was before
 --- deciding to open it - arrow through, Enter opens the selected one in
@@ -336,7 +386,7 @@ local function open_with_snacks_preview(key, entries)
     confirm = function(picker, item)
       picker:close()
       if item then
-        compare.open_single(key, item.idx)
+        M.open_in_kulala_ui(key, item.idx)
       end
     end,
   })
@@ -374,7 +424,7 @@ function M.open_here()
     if not idx then
       return
     end
-    compare.open_single(key, idx)
+    M.open_in_kulala_ui(key, idx)
   end)
 end
 

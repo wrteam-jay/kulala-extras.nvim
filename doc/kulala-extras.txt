@@ -37,9 +37,12 @@ public `require("kulala.api").on("after_request", ...)` hook.
 :KulalaExtrasOpenHere       Browse past responses for the request under
                              the cursor with a live preview
                              (status/headers/body) via snacks.nvim if
-                             installed, open the selected one in a side
-                             split. Falls back to a plain list (no
-                             preview) without snacks.nvim.
+                             installed. Falls back to a plain list (no
+                             preview) without snacks.nvim. Enter opens
+                             the selected one in kulala's own native
+                             response window (Body/Headers/Verbose/
+                             Report) - see the README's "Privacy" and
+                             "Fragility" sections.
 
                                                     *:KulalaExtrasCompare*
 :KulalaExtrasCompare        Full picker: pick a request, then two past

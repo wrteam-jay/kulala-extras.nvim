@@ -87,6 +87,12 @@ function M.record(payload)
     line = response.line,
     name = response.name,
     file = response.file,
+    -- the complete, unmodified response - kept alongside the curated
+    -- fields above so it can be handed straight back to kulala's own UI
+    -- (kulala.ui.open_default_view() reads a "Response"-shaped table with
+    -- many more fields than kulala-extras itself uses, e.g. stats,
+    -- _kulala_verbose_trace, request.*) - see virtual_text.open_in_kulala_ui()
+    raw = response,
   }
   table.insert(entries, 1, entry)
 

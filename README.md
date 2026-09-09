@@ -20,8 +20,11 @@ forked internals.
   Word-level highlighting, a diff count, and JSON syntax highlighting.
   Headers are left out on purpose. Things like `date` or `cf-ray`
   change on every request and would drown out real differences.
-- **Scoped per file**. Two projects that hit the same URL never mix
-  history.
+- **Scoped per file, tracked by name**. Two projects that hit the same
+  URL never mix history. A request keeps its history across URL edits
+  too (change an id or a query param and rerun - still the same
+  request, still one history), since it's the "### NAME" that tracks
+  identity, not the exact URL.
 - **Real kulala UI**. Opening an entry shows it in kulala's own
   response window (Body/Headers/Verbose/Report). It is not a
   lookalike.

@@ -6,12 +6,20 @@ local M = {}
 --- Scoped by the `.http` file too (`response.file`), not just method+url -
 --- two different projects hitting the same URL (e.g. a shared local dev
 --- health-check endpoint) would otherwise share one history file.
+---
+--- Identity is the request's *name* (kulala always assigns one - the
+--- "### NAME" comment, or an auto-generated "REQUEST_NNN" when there
+--- isn't one), not method+url. A request's URL is often edited between
+--- runs (swapping an id, a query param, a page number) while it's still
+--- "the same request" to the user - keying on url would split those
+--- into separate histories that never see each other, breaking
+--- CompareHere right when it's most useful (comparing before/after an
+--- edit). This also matches how virtual_text's marker placement already
+--- groups by name, not url - see find_parsed_request().
 --- @param response table full response record, see kulala's
 ---   lua/kulala/cmd/init.lua (response.url/.method/.name/.file)
 --- @return string
 function M.key_for(response)
-  local url = response.url or "unknown-url"
-  local method = response.method or "GET"
   local name = response.name or ""
   -- fnamemodify(:p) so callers computing this from a buffer name
   -- (vim.api.nvim_buf_get_name) and kulala's own response.file always
@@ -19,12 +27,19 @@ function M.key_for(response)
   -- relative to a symlinked directory (e.g. macOS /tmp -> /private/tmp)
   local file = response.file and response.file ~= "" and vim.fn.fnamemodify(response.file, ":p") or ""
   -- hash the file path rather than inlining it - full absolute paths would
-  -- make history filenames unreasonably long. `name` (the "### NAME"
-  -- comment) is included so two requests that happen to share a method+url
-  -- (e.g. a copy-pasted block with only headers changed) still get
-  -- separate history rather than silently merging.
+  -- make history filenames unreasonably long.
   local file_hash = vim.fn.sha256(file):sub(1, 8)
-  return file_hash .. "_" .. (name .. "_" .. method .. "_" .. url):gsub("[^%w]", "_")
+
+  if name ~= "" then
+    return file_hash .. "_" .. name:gsub("[^%w]", "_")
+  end
+
+  -- name should always be present (kulala auto-generates one), but fall
+  -- back to method+url if it's ever genuinely missing, so two truly
+  -- unnamed/unidentifiable requests don't collide into one history
+  local url = response.url or "unknown-url"
+  local method = response.method or "GET"
+  return file_hash .. "_" .. (method .. "_" .. url):gsub("[^%w]", "_")
 end
 
 --- @param key string

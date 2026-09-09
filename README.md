@@ -36,6 +36,10 @@ no forked internals.
 
 - Neovim >= 0.10
 - [kulala.nvim](https://github.com/mistweaverco/kulala.nvim)
+- [snacks.nvim](https://github.com/folke/snacks.nvim) *(optional)* - gives
+  `:KulalaExtrasOpenHere` a live preview while browsing history. Without
+  it, that command falls back to a plain `vim.ui.select` list (no
+  preview) - nothing else in the plugin depends on it.
 
 ## Installation
 
@@ -66,7 +70,7 @@ require("kulala-extras").setup({
 | Command                          | Does                                                       |
 | ---------------------------------- | ------------------------------------------------------------ |
 | `:KulalaExtrasCompareHere`       | Diff the 2 latest responses for the request under the cursor |
-| `:KulalaExtrasOpenHere`          | Pick one past response for the request under the cursor, open it in a side split |
+| `:KulalaExtrasOpenHere`          | Browse past responses for the request under the cursor with a live preview (status/headers/body), open the selected one in a side split |
 | `:KulalaExtrasCompare`           | Full picker: pick a request, then two past responses         |
 | `:KulalaExtrasClearHistoryHere`  | Clear history for the request under the cursor               |
 | `:KulalaExtrasClearHistory`      | Clear all recorded history, every request (asks to confirm)  |

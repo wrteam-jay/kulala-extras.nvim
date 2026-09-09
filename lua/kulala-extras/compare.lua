@@ -11,7 +11,7 @@ local METADATA_LINES = 2
 
 --- @param entry table history entry, see history.record()
 --- @return string[] lines, boolean is_json
-local function format_entry(entry)
+function M.format_entry(entry)
   local lines = {
     ("# %s (status %s)"):format(os.date("%Y-%m-%d %H:%M:%S", entry.timestamp), tostring(entry.status)),
     "",
@@ -84,8 +84,8 @@ function M.diff(key, index_a, index_b)
     return
   end
 
-  local lines_a, json_a = format_entry(a)
-  local lines_b, json_b = format_entry(b)
+  local lines_a, json_a = M.format_entry(a)
+  local lines_b, json_b = M.format_entry(b)
   local buf_a = make_diff_buf(lines_a, json_a)
   local buf_b = make_diff_buf(lines_b, json_b)
 
@@ -117,7 +117,7 @@ function M.open_single(key, index)
     return
   end
 
-  local lines, is_json = format_entry(entry)
+  local lines, is_json = M.format_entry(entry)
   local buf = make_diff_buf(lines, is_json)
   vim.cmd("vsplit")
   vim.api.nvim_win_set_buf(0, buf)

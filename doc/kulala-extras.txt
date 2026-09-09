@@ -34,8 +34,12 @@ public `require("kulala.api").on("after_request", ...)` hook.
                              picker - the common case.
 
                                                    *:KulalaExtrasOpenHere*
-:KulalaExtrasOpenHere       Pick one past response for the request under
-                             the cursor, open it in a side split.
+:KulalaExtrasOpenHere       Browse past responses for the request under
+                             the cursor with a live preview
+                             (status/headers/body) via snacks.nvim if
+                             installed, open the selected one in a side
+                             split. Falls back to a plain list (no
+                             preview) without snacks.nvim.
 
                                                     *:KulalaExtrasCompare*
 :KulalaExtrasCompare        Full picker: pick a request, then two past

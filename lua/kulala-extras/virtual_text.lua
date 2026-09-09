@@ -124,6 +124,7 @@ local function place_markers(bufnr, key, req)
   for i = 1, math.min(MAX_SHOWN, #entries) do
     table.insert(virt_lines, { { "  " .. label(entries[i]), "Comment" } })
   end
+  table.insert(virt_lines, { { "", "Comment" } }) -- trailing blank line so this doesn't visually run into the next request's ###
 
   local extmark_id = vim.api.nvim_buf_set_extmark(bufnr, ns, end_line0, 0, {
     virt_lines = virt_lines,
@@ -309,8 +310,43 @@ function M.compare_here()
   compare.diff_latest(key)
 end
 
+--- Browses history entries with a live preview (status/headers/body) via
+--- Snacks.picker, so you can see what a response actually was before
+--- deciding to open it - arrow through, Enter opens the selected one in
+--- a side split. See open_here() for the plain vim.ui.select fallback
+--- when Snacks isn't installed.
+--- @param key string
+--- @param entries table[] history.get(key) result
+local function open_with_snacks_preview(key, entries)
+  local items = {}
+  for i, entry in ipairs(entries) do
+    local lines, is_json = compare.format_entry(entry)
+    items[i] = {
+      text = label(entry),
+      preview = { text = table.concat(lines, "\n"), ft = is_json and "json" or nil },
+    }
+  end
+
+  Snacks.picker.pick({
+    source = "kulala_extras_history",
+    title = "kulala-extras history",
+    items = items,
+    format = "text",
+    preview = "preview",
+    confirm = function(picker, item)
+      picker:close()
+      if item then
+        compare.open_single(key, item.idx)
+      end
+    end,
+  })
+end
+
 --- Opens a single history entry (not a diff) in a vertical split - the
 --- "pick one, view it" flow, since virt_lines aren't cursor-addressable.
+--- Uses Snacks.picker for a live preview when available (see
+--- open_with_snacks_preview()), falls back to a plain vim.ui.select list
+--- (no preview) otherwise - kulala-extras doesn't hard-depend on Snacks.
 function M.open_here()
   local key = M.key_at_cursor(vim.api.nvim_get_current_buf())
   if not key then
@@ -322,6 +358,11 @@ function M.open_here()
   if #entries == 0 then
     vim.notify("kulala-extras: no history entries for this request", vim.log.levels.INFO)
     return
+  end
+
+  local has_snacks = pcall(require, "snacks") and _G.Snacks and _G.Snacks.picker
+  if has_snacks then
+    return open_with_snacks_preview(key, entries)
   end
 
   local labels = {}

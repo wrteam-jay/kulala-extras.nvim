@@ -57,6 +57,7 @@ require("kulala-extras").setup({
 | Command                       | Does                                                       |
 | ------------------------------ | ------------------------------------------------------------ |
 | `:KulalaExtrasCompareHere`    | Diff the 2 latest responses for the request under the cursor |
+| `:KulalaExtrasOpenHere`       | Pick one past response for the request under the cursor, open it in a side split |
 | `:KulalaExtrasCompare`        | Full picker: pick a request, then two past responses         |
 | `:KulalaExtrasDebugPayload`   | One-shot: print the raw payload of the next response          |
 

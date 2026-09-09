@@ -32,6 +32,10 @@ public `require("kulala.api").on("after_request", ...)` hook.
                              request under the cursor. One step, no
                              picker - the common case.
 
+                                                   *:KulalaExtrasOpenHere*
+:KulalaExtrasOpenHere       Pick one past response for the request under
+                             the cursor, open it in a side split.
+
                                                     *:KulalaExtrasCompare*
 :KulalaExtrasCompare        Full picker: pick a request, then two past
                              responses, and diff them in a native Neovim

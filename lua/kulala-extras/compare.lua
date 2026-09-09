@@ -83,6 +83,24 @@ function M.diff(key, index_a, index_b)
   )
 end
 
+--- Opens a single history entry in a vertical split beside the current
+--- window - for "just show me this one", not a diff.
+--- @param key string
+--- @param index integer 1-based index into history.get(key), newest first
+function M.open_single(key, index)
+  local entries = history.get(key)
+  local entry = entries[index]
+  if not entry then
+    vim.notify("kulala-extras: no such history entry", vim.log.levels.WARN)
+    return
+  end
+
+  local lines, is_json = format_entry(entry)
+  local buf = make_diff_buf(lines, is_json)
+  vim.cmd("vsplit")
+  vim.api.nvim_win_set_buf(0, buf)
+end
+
 --- Diffs the two most recent responses for a request - the common case,
 --- skipping the "which entries" picker entirely.
 --- @param key string

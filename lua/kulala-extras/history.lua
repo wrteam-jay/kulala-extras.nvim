@@ -12,10 +12,19 @@ local M = {}
 function M.key_for(response)
   local url = response.url or "unknown-url"
   local method = response.method or "GET"
+  local name = response.name or ""
+  -- fnamemodify(:p) so callers computing this from a buffer name
+  -- (vim.api.nvim_buf_get_name) and kulala's own response.file always
+  -- normalize to the same absolute path, even if one is unresolved
+  -- relative to a symlinked directory (e.g. macOS /tmp -> /private/tmp)
+  local file = response.file and response.file ~= "" and vim.fn.fnamemodify(response.file, ":p") or ""
   -- hash the file path rather than inlining it - full absolute paths would
-  -- make history filenames unreasonably long
-  local file_hash = vim.fn.sha256(response.file or ""):sub(1, 8)
-  return file_hash .. "_" .. (method .. "_" .. url):gsub("[^%w]", "_")
+  -- make history filenames unreasonably long. `name` (the "### NAME"
+  -- comment) is included so two requests that happen to share a method+url
+  -- (e.g. a copy-pasted block with only headers changed) still get
+  -- separate history rather than silently merging.
+  local file_hash = vim.fn.sha256(file):sub(1, 8)
+  return file_hash .. "_" .. (name .. "_" .. method .. "_" .. url):gsub("[^%w]", "_")
 end
 
 --- @param key string

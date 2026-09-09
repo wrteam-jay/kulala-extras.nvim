@@ -58,8 +58,10 @@ public `require("kulala.api").on("after_request", ...)` hook.
 4. Sign column                                       *kulala-extras-signs*
 
 A dim `|` marks every request in the buffer that has recorded history. A
-highlighted `>` tracks the cursor, showing which request the *Here
-commands above will act on. Requires 'signcolumn' to be visible - set
-automatically to "yes" on FileType http/rest.
+highlighted `>` tracks the cursor across every request (using kulala's
+own parser, not text matching), showing which one kulala would run
+next - and, being cursor-based, which one the *Here commands above act
+on too. Requires 'signcolumn' to be visible - set automatically to "yes"
+on FileType http/rest.
 
  vim:tw=78:ts=8:ft=help:norl:

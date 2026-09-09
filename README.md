@@ -19,9 +19,11 @@ no forked internals.
   panel to open. Persisted history shows up immediately when you reopen a
   file too, not only after rerunning something.
 - **Active-request sign column** — a dim `│` marks every request that has
-  recorded history; a highlighted `▶` tracks the cursor to show exactly
-  which request `CompareHere`/`OpenHere`/`ClearHistoryHere` will act on
-  in a file with multiple requests, gitsigns-style.
+  recorded history. A highlighted `▶` tracks the cursor across every
+  request in the file (using kulala's own parser, not text matching) to
+  show which one kulala would run next - and, since it's cursor-based,
+  also which one `CompareHere`/`OpenHere`/`ClearHistoryHere` act on.
+  gitsigns-style: always visible, never inferred.
 - **Compare** — diff two past responses in a native Neovim diff split,
   with word-level highlighting, a difference count, and JSON syntax
   highlighting when the response was JSON. `:KulalaExtrasCompareHere`
@@ -82,6 +84,18 @@ tokens, PII, or other sensitive data back in a response, that data
 persists to disk indefinitely (or until `:KulalaExtrasClearHistory`).
 Nothing is sent anywhere; this is purely local, but treat that directory
 the way you'd treat any other local cache of API responses.
+
+## Performance
+
+`kulala.parser.document.get_document()` (kulala's own request parser)
+shells out to the `kulala-core` binary - each call is a subprocess spawn,
+not free. This plugin parses a buffer **once** per event (file open, text
+change, completed request) and reuses that single parse for every history
+key and for cursor lookups; the cursor-tracked `▶` sign itself does no
+parsing at all; on `CursorMoved` it's a plain array scan against the
+cached parse. Calling `get_document()` once per history key on file open
+was an earlier bug here - it turned opening a file with a handful of
+recorded requests into a multi-second wait.
 
 ## Status
 

@@ -28,15 +28,29 @@ function M.setup(opts)
     group = group,
     pattern = { "http", "rest" },
     callback = function(args)
-      vim.wo.signcolumn = "yes" -- otherwise the "which request is active" sign has no gutter to draw in
+      vim.wo.signcolumn = "yes" -- otherwise the sign column has no gutter to draw in
+      -- render_buffer() parses once and populates parsed_cache itself -
+      -- a separate refresh_parsed() call here would be a second,
+      -- redundant kulala-core subprocess spawn
       virtual_text.render_buffer(args.buf)
       virtual_text.update_active_sign(args.buf)
 
-      -- keep the "▶" active-request sign in sync with the cursor - which
-      -- request kulala-extras' keymaps (CompareHere/OpenHere/ClearHistoryHere)
-      -- will act on should always be visible, not inferred. Buffer-local
-      -- (rather than a filename-pattern match) so it only ever fires for
-      -- buffers actually filetype=http/rest, however they got that way.
+      -- kulala.parser.document.get_document() (used by refresh_parsed)
+      -- shells out to kulala-core, so it's re-parsed on text changes/save
+      -- only - never per-keystroke (TextChangedI) or per CursorMoved,
+      -- both far too frequent for a subprocess call.
+      vim.api.nvim_create_autocmd({ "TextChanged", "InsertLeave", "BufWritePost" }, {
+        group = group,
+        buffer = args.buf,
+        callback = function()
+          virtual_text.refresh_parsed(args.buf)
+          virtual_text.update_active_sign(args.buf)
+        end,
+      })
+
+      -- keep the "▶" sign in sync with the cursor - cheap: just an
+      -- array lookup against the cache refresh_parsed() maintains, no
+      -- subprocess call, safe for every CursorMoved.
       vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
         group = group,
         buffer = args.buf,

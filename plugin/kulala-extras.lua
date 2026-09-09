@@ -13,7 +13,7 @@ end, { desc = "One-step: diff the two most recent responses for the request unde
 
 vim.api.nvim_create_user_command("KulalaExtrasOpenHere", function()
   require("kulala-extras.virtual_text").open_here()
-end, { desc = "Pick one past response for the request under the cursor, open it in a side split" })
+end, { desc = "Browse past responses for the request under the cursor (live preview), open the selected one in kulala's own UI" })
 
 vim.api.nvim_create_user_command("KulalaExtrasClearHistoryHere", function()
   require("kulala-extras.virtual_text").clear_here()

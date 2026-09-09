@@ -1,67 +1,47 @@
 # kulala-extras.nvim
 
-Response history and side-by-side compare on top of
-[kulala.nvim](https://github.com/mistweaverco/kulala.nvim) — the two
-things a JetBrains-style `.http` workflow is missing in Neovim.
+Adds history, compare, and an active-request sign column to
+[kulala.nvim](https://github.com/mistweaverco/kulala.nvim).
 
-kulala.nvim already does the hard part: parsing `.http` files, sending
-requests, and curl-paste import (`<leader>RC` / `require("kulala").from_curl()`).
-This plugin only adds a thin layer on top, using kulala's public
-`require("kulala.api").on("after_request", ...)` hook — no monkeypatching,
-no forked internals.
+Uses only kulala's public `after_request` hook. No monkeypatching, no
+forked internals.
 
 ## Features
 
-- **History** — every response is recorded automatically (timestamp,
-  status, headers, body), grouped per request.
-- **Inline history markers** — the last few runs of a request show up as
-  virtual text right under it in the buffer, JetBrains-style, no separate
-  panel to open. Persisted history shows up immediately when you reopen a
-  file too, not only after rerunning something.
-- **Active-request sign column** — a dim `│` marks every request that has
-  recorded history. A highlighted `▶` tracks the cursor across every
-  request in the file (using kulala's own parser, not text matching) to
-  show which one kulala would run next - and, since it's cursor-based,
-  also which one `CompareHere`/`OpenHere`/`ClearHistoryHere` act on.
-  gitsigns-style: always visible, never inferred.
-- **Compare** — diff two past responses in a native Neovim diff split,
-  with word-level highlighting, a difference count, and JSON syntax
-  highlighting when the response was JSON. `:KulalaExtrasCompareHere`
-  diffs the two latest runs of whatever request the cursor is on in one
-  step; `:KulalaExtrasCompare` is the full picker for anything older.
-- History is scoped per `.http`/`.rest` file, so two projects hitting the
-  same URL (e.g. a shared local dev endpoint) never mix histories.
-- **Opens in kulala's real UI, not a lookalike** — selecting a history
-  entry (via `OpenHere`) appends it to kulala's own response DB and calls
-  its native `open_default_view()`, so you get the exact same
-  Body/Headers/Verbose/Report window a live request opens, not a
-  separate view kulala-extras built itself. This writes into
-  `kulala.db`'s internal `responses` table, which isn't a published API -
-  see **Fragility** below.
+- **History**. Every response is recorded automatically, grouped by
+  request.
+- **Inline markers**. The last few runs show as virtual text under
+  each request. History shows up on reopening a file too, not only
+  after a fresh run.
+- **Sign column**. A dim `│` marks a request that has history. A `▶`
+  tracks your cursor. It shows which request will run next, and which
+  one the `*Here` commands act on.
+- **Compare**. Diff two responses in a native diff split. Word-level
+  highlighting, a diff count, and JSON syntax highlighting.
+- **Scoped per file**. Two projects that hit the same URL never mix
+  history.
+- **Real kulala UI**. Opening an entry shows it in kulala's own
+  response window (Body/Headers/Verbose/Report). It is not a
+  lookalike.
 
 ## Requirements
 
-- Neovim >= 0.10
+- Neovim 0.10 or newer
 - [kulala.nvim](https://github.com/mistweaverco/kulala.nvim)
-- [snacks.nvim](https://github.com/folke/snacks.nvim) *(optional)* - gives
-  `:KulalaExtrasOpenHere` a live preview while browsing history. Without
-  it, that command falls back to a plain `vim.ui.select` list (no
-  preview) - nothing else in the plugin depends on it.
+- [snacks.nvim](https://github.com/folke/snacks.nvim), optional. Adds a
+  live preview to `OpenHere`. Without it, `OpenHere` shows a plain
+  list.
 
 ## Installation
 
-<details>
-<summary>lazy.nvim</summary>
-
 ```lua
+-- lazy.nvim
 {
-  "your-username/kulala-extras.nvim",
+  "wrteam-jay/kulala-extras.nvim",
   dependencies = { "mistweaverco/kulala.nvim" },
   opts = {},
 }
 ```
-
-</details>
 
 ## Setup
 
@@ -72,80 +52,75 @@ require("kulala-extras").setup({
 })
 ```
 
-## Usage
+## Commands
 
-| Command                          | Does                                                       |
-| ---------------------------------- | ------------------------------------------------------------ |
-| `:KulalaExtrasCompareHere`       | Diff the 2 latest responses for the request under the cursor |
-| `:KulalaExtrasOpenHere`          | Browse past responses for the request under the cursor with a live preview (status/headers/body); Enter opens the selected one in kulala's own native response window |
-| `:KulalaExtrasCompare`           | Full picker: pick a request, then two past responses         |
-| `:KulalaExtrasClearHistoryHere`  | Clear history for the request under the cursor               |
-| `:KulalaExtrasClearHistory`      | Clear all recorded history, every request (asks to confirm)  |
-| `:KulalaExtrasDebugPayload`      | One-shot: print the raw payload of the next response          |
+| Command                         | Does                                            |
+| --------------------------------- | -------------------------------------------------- |
+| `:KulalaExtrasCompareHere`      | Diffs the 2 latest responses for the cursor's request |
+| `:KulalaExtrasOpenHere`         | Browses history with a preview, opens in kulala's UI |
+| `:KulalaExtrasCompare`          | Full picker: any request, any two responses     |
+| `:KulalaExtrasClearHistoryHere` | Clears history for the cursor's request          |
+| `:KulalaExtrasClearHistory`     | Clears all history. Asks for confirmation first  |
+| `:KulalaExtrasDebugPayload`     | Prints the raw payload of the next response       |
 
-History is recorded automatically once `setup()` runs — nothing to call
-per request.
+There are no default keymaps. Only commands.
+
+```lua
+-- suggested lazy.nvim keys. Check your kulala.nvim config first:
+-- global_keymaps already claims most of <leader>R.
+keys = {
+  { "<leader>Rh", "<cmd>KulalaExtrasCompareHere<cr>", desc = "Compare latest 2 (here)" },
+  { "<leader>Rd", "<cmd>KulalaExtrasCompare<cr>", desc = "Compare (full picker)" },
+  { "<leader>Rl", "<cmd>KulalaExtrasOpenHere<cr>", desc = "Open a past response (here)" },
+  { "<leader>Rk", "<cmd>KulalaExtrasClearHistoryHere<cr>", desc = "Clear history (here)" },
+},
+```
 
 ## Privacy
 
-History is stored **unencrypted, in plain JSON**, under
-`stdpath("data")/kulala-extras/history/` (configurable via
-`history_dir`). Nothing is sent anywhere; this is purely local, but
-treat that directory the way you'd treat any other local cache of API
-responses/credentials.
-
-**Every entry now stores the complete raw response** (`entry.raw`, added
-for `open_in_kulala_ui()` - kulala's UI functions expect the full
-"Response"-shaped table). This includes `_kulala_verbose_trace`, curl's
-own verbose trace text - which contains **every request header sent,
-`Authorization` included, in plaintext**. Before this, history only ever
-stored response bodies/headers; now every recorded request's own
-credentials persist to disk too, indefinitely (or until
-`:KulalaExtrasClearHistory`). If your `.http` files send real bearer
-tokens/API keys, they're now written to `history_dir` in the clear on
-every run.
+- History is stored as **plain, unencrypted JSON**. Default location:
+  `stdpath("data")/kulala-extras/history/`. Set `history_dir` to
+  change it.
+- Nothing leaves your machine.
+- Each entry stores the full raw response. This includes curl's
+  verbose trace.
+- The verbose trace includes your request headers. `Authorization` is
+  included, in plain text.
+- If your `.http` files send real bearer tokens or API keys, those
+  tokens go to disk on every run.
+- Run `:KulalaExtrasClearHistory` to wipe stored history.
 
 ## Performance
 
-`kulala.parser.document.get_document()` (kulala's own request parser)
-shells out to the `kulala-core` binary - each call is a subprocess spawn,
-not free. This plugin parses a buffer **once** per event (file open, text
-change, completed request) and reuses that single parse for every history
-key and for cursor lookups; the cursor-tracked `▶` sign itself does no
-parsing at all; on `CursorMoved` it's a plain array scan against the
-cached parse. Calling `get_document()` once per history key on file open
-was an earlier bug here - it turned opening a file with a handful of
-recorded requests into a multi-second wait.
-
-Parsing is deferred a tick via `vim.schedule()` everywhere it's
-triggered (file open, text change, completed request) - kulala's
-document parser has no public async entry point, so the call itself
-still blocks when it runs, but scheduling it means the buffer displays
-and stays editable first instead of the parse stalling the triggering
-event.
+- Kulala's parser shells out to `kulala-core`. Each call spawns a
+  subprocess.
+- This plugin parses a buffer once per event: file open, save, or
+  completed request. It reuses that one parse for every history key
+  and cursor lookup.
+- An earlier version parsed once per history key. That turned file-open
+  into a multi-second wait. This is fixed now.
+- Every parse runs through `vim.schedule()`. The buffer displays first,
+  the parse runs a moment later. The parse itself still blocks the
+  editor briefly when it runs, but never on file-open.
 
 ## Fragility
 
-Opening a history entry writes it into `kulala.db`'s live `responses`
-table and points `current_response_pos` at it, then calls
-`kulala.ui.open_default_view()` - kulala's own internal state, not a
-published API. Deliberately append-only (never overwrites or removes an
-existing entry), so a real request run afterwards is unaffected, but a
-future kulala.nvim update that changes that DB's shape could break this
-silently. If it does, `open_in_kulala_ui()` falls back to
-`compare.open_single()` (kulala-extras' own plain view) automatically -
-worst case is a less pretty window, not a crash.
-
-Entries recorded before this feature existed have no `raw` field and
-fall back to the plain view too - only re-run requests get the full
-kulala-UI treatment retroactively.
+- `OpenHere` writes into `kulala.db`'s live response table to show
+  kulala's own UI. This is not a published API.
+- The write is append-only. It never changes or removes an existing
+  entry. A real request run afterwards is unaffected.
+- A future kulala.nvim update could change that table's shape and
+  break this silently.
+- If that happens, `OpenHere` falls back to a plain view. No crash.
+- Entries recorded before this feature existed use the same fallback.
 
 ## Status
 
-Early / personal project, not yet published. Verified against real
-requests - the `after_request` payload shape (`response.response_code`
-for HTTP status, `response.status` as a success bool, `response.headers_tbl`
-for structured headers) is now pinned in `lua/kulala-extras/history.lua`.
+Early, personal project. No automated tests yet.
+
+Field mappings and the `kulala.db` write above were checked against
+real requests, not just kulala's docs. If kulala's payload shape ever
+changes, run `:KulalaExtrasDebugPayload` to see the current shape.
 
 ## License
 

@@ -3,13 +3,12 @@ local config = require("kulala-extras.config")
 local M = {}
 
 --- Derives a stable key for a request so history entries group correctly.
---- Falls back gracefully across kulala response shapes since the exact
---- field names are not pinned in kulala's docs as of this writing.
---- @param response table
+--- @param response table full response record, see kulala's
+---   lua/kulala/cmd/init.lua (response.url/.method/.name)
 --- @return string
 local function request_key(response)
-  local url = response.url or (response.request and response.request.url) or "unknown-url"
-  local method = response.method or (response.request and response.request.method) or "GET"
+  local url = response.url or "unknown-url"
+  local method = response.method or "GET"
   return (method .. " " .. url):gsub("[^%w]", "_")
 end
 
@@ -44,18 +43,28 @@ function M.setup()
 end
 
 --- Records one response into its request's history file.
---- @param response table raw response object from kulala's after_request hook
-function M.record(response)
+--- @param payload table the `after_request` callback argument, shaped
+---   `{ headers, body, response }` - see kulala's lua/kulala/api/init.lua
+---   `M.trigger()`. `response` is the full record from
+---   lua/kulala/cmd/init.lua: `response_code` is the HTTP status (`status`
+---   is a success boolean, `code` is curl's own exit code - not the same
+---   thing), `headers_tbl` is the parsed header table, `json` is the
+---   parsed body when it's JSON.
+function M.record(payload)
+  local response = payload.response or payload
   local key = request_key(response)
   local entries = read_history(key)
 
   table.insert(entries, 1, {
     timestamp = os.time(),
-    url = response.url or (response.request and response.request.url),
-    method = response.method or (response.request and response.request.method),
-    status = response.status or response.code,
-    headers = response.headers,
+    url = response.url,
+    method = response.method,
+    status = response.response_code,
+    success = response.status,
+    duration = response.duration,
+    headers = response.headers_tbl or response.headers,
     body = response.body,
+    json = response.json,
   })
 
   while #entries > config.options.max_history_per_request do

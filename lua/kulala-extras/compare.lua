@@ -10,8 +10,11 @@ local function format_entry(entry)
     "",
   }
   if entry.headers then
+    -- kulala's headers_tbl values are lists (a header can repeat), e.g.
+    -- { ["cache-control"] = { "no-cache", "private" } }
     for k, v in pairs(entry.headers) do
-      table.insert(lines, ("%s: %s"):format(k, v))
+      local value = type(v) == "table" and table.concat(v, ", ") or tostring(v)
+      table.insert(lines, ("%s: %s"):format(k, value))
     end
     table.insert(lines, "")
   end

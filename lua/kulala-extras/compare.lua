@@ -2,70 +2,42 @@ local history = require("kulala-extras.history")
 
 local M = {}
 
---- Number of lines format_entry() always prepends before the diffable
---- content (the "# <timestamp> (status ...)" line + a blank line). These
---- always differ between two entries just because the timestamps differ,
---- so callers computing a difference *count* must skip them - see
---- count_diff_hunks().
-local METADATA_LINES = 2
-
+--- Body only - headers (cf-ray, age, date, nel, reporting-endpoints, etc.)
+--- are dynamic on every single request by design and drown out the
+--- actual signal: did the response body change. Status/timestamp show in
+--- the buffer name (tab/title bar) instead of the diffed content itself.
 --- @param entry table history entry, see history.record()
 --- @return string[] lines, boolean is_json
 function M.format_entry(entry)
-  local lines = {
-    ("# %s (status %s)"):format(os.date("%Y-%m-%d %H:%M:%S", entry.timestamp), tostring(entry.status)),
-    "",
-  }
-  if entry.headers then
-    -- kulala's headers_tbl values are lists (a header can repeat), e.g.
-    -- { ["cache-control"] = { "no-cache", "private" } }. Sort keys so
-    -- identical header sets always render in the same order - table
-    -- iteration order is otherwise undefined and would show up as a
-    -- spurious diff between two byte-identical responses.
-    local keys = vim.tbl_keys(entry.headers)
-    table.sort(keys)
-    for _, k in ipairs(keys) do
-      local v = entry.headers[k]
-      local value = type(v) == "table" and table.concat(v, ", ") or tostring(v)
-      table.insert(lines, ("%s: %s"):format(k, value))
-    end
-    table.insert(lines, "")
-  end
-
   -- kulala's `body` is already the response as the server sent it (with
   -- its own formatting/indentation intact) - diff that directly rather
   -- than re-serializing `json`, which would just show formatting noise.
   local is_json = entry.json ~= nil
   local body = entry.body or ""
+  return vim.split(body, "\n"), is_json
+end
 
-  for _, line in ipairs(vim.split(body, "\n")) do
-    table.insert(lines, line)
-  end
-  return lines, is_json
+--- @param entry table history entry, see history.record()
+--- @return string a short label for the buffer name / tab title
+local function entry_label(entry)
+  return ("%s (status %s)"):format(os.date("%Y-%m-%d %H:%M:%S", entry.timestamp), tostring(entry.status))
 end
 
 --- @param lines string[]
 --- @param is_json boolean
+--- @param name string buffer name, shown in the tab/window title
 --- @return integer bufnr
-local function make_diff_buf(lines, is_json)
+local function make_diff_buf(lines, is_json, name)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   vim.bo[buf].filetype = is_json and "json" or "text"
+  pcall(vim.api.nvim_buf_set_name, buf, name)
   return buf
 end
 
---- @param lines string[] a full format_entry() result, metadata line included
---- @return string[] the same lines minus the leading timestamp/blank line
-local function without_metadata(lines)
-  return { table.unpack(lines, METADATA_LINES + 1) }
-end
-
---- @return integer count of diff hunks between two entries' diffable
----   content - the timestamp line is deliberately excluded (see
----   METADATA_LINES), it always differs and isn't a real difference
+--- @return integer count of diff hunks between two entries' bodies
 local function count_diff_hunks(lines_a, lines_b)
-  local a, b = without_metadata(lines_a), without_metadata(lines_b)
-  local diff = vim.diff(table.concat(a, "\n") .. "\n", table.concat(b, "\n") .. "\n", {
+  local diff = vim.diff(table.concat(lines_a, "\n") .. "\n", table.concat(lines_b, "\n") .. "\n", {
     result_type = "indices",
     algorithm = "histogram",
   })
@@ -84,10 +56,14 @@ function M.diff(key, index_a, index_b)
     return
   end
 
+  -- index_a/index_b prefix keeps buffer names unique even when two
+  -- entries were recorded in the same second (entry_label()'s timestamp
+  -- is only second-precision) - nvim_buf_set_name errors on a duplicate
+  -- name, which silently dropped the second buffer's name entirely
   local lines_a, json_a = M.format_entry(a)
   local lines_b, json_b = M.format_entry(b)
-  local buf_a = make_diff_buf(lines_a, json_a)
-  local buf_b = make_diff_buf(lines_b, json_b)
+  local buf_a = make_diff_buf(lines_a, json_a, ("kulala-extras://%d %s"):format(index_a, entry_label(a)))
+  local buf_b = make_diff_buf(lines_b, json_b, ("kulala-extras://%d %s"):format(index_b, entry_label(b)))
 
   vim.cmd("tabnew")
   vim.api.nvim_win_set_buf(0, buf_a)
@@ -118,7 +94,7 @@ function M.open_single(key, index)
   end
 
   local lines, is_json = M.format_entry(entry)
-  local buf = make_diff_buf(lines, is_json)
+  local buf = make_diff_buf(lines, is_json, ("kulala-extras://%d %s"):format(index, entry_label(entry)))
   vim.cmd("vsplit")
   vim.api.nvim_win_set_buf(0, buf)
 end

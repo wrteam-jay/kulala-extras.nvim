@@ -16,8 +16,10 @@ forked internals.
 - **Sign column**. A dim `│` marks a request that has history. A `▶`
   tracks your cursor. It shows which request will run next, and which
   one the `*Here` commands act on.
-- **Compare**. Diff two responses in a native diff split. Word-level
-  highlighting, a diff count, and JSON syntax highlighting.
+- **Compare**. Diff two response **bodies** in a native diff split.
+  Word-level highlighting, a diff count, and JSON syntax highlighting.
+  Headers are left out on purpose. Things like `date` or `cf-ray`
+  change on every request and would drown out real differences.
 - **Scoped per file**. Two projects that hit the same URL never mix
   history.
 - **Real kulala UI**. Opening an entry shows it in kulala's own

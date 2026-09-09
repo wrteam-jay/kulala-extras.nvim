@@ -16,8 +16,12 @@ function M.setup(opts)
   end
 
   kulala_api.on("after_request", function(payload)
-    local key, entry = history.record(payload)
-    virtual_text.on_record(key, entry)
+    local key, entry = history.record(payload) -- fast (disk write), stays synchronous
+    -- on_record() reparses the buffer (blocking subprocess call) - defer
+    -- so it doesn't stall kulala's own after_request handling
+    vim.schedule(function()
+      virtual_text.on_record(key, entry)
+    end)
   end)
 
   local group = vim.api.nvim_create_augroup("KulalaExtrasHistory", { clear = true })
@@ -29,11 +33,19 @@ function M.setup(opts)
     pattern = { "http", "rest" },
     callback = function(args)
       vim.wo.signcolumn = "yes" -- otherwise the sign column has no gutter to draw in
+
       -- render_buffer() parses once and populates parsed_cache itself -
       -- a separate refresh_parsed() call here would be a second,
-      -- redundant kulala-core subprocess spawn
-      virtual_text.render_buffer(args.buf)
-      virtual_text.update_active_sign(args.buf)
+      -- redundant kulala-core subprocess spawn. Deferred a tick: parsing
+      -- is a blocking subprocess call (kulala's document parser has no
+      -- public async entry point), so running it inline here would stall
+      -- the FileType autocmd chain and make the file open feel slow.
+      -- Scheduling it lets the buffer display and become editable first;
+      -- the (still blocking-when-it-runs) parse happens right after.
+      vim.schedule(function()
+        virtual_text.render_buffer(args.buf)
+        virtual_text.update_active_sign(args.buf)
+      end)
 
       -- kulala.parser.document.get_document() (used by refresh_parsed)
       -- shells out to kulala-core, so it's re-parsed on text changes/save
@@ -43,8 +55,10 @@ function M.setup(opts)
         group = group,
         buffer = args.buf,
         callback = function()
-          virtual_text.refresh_parsed(args.buf)
-          virtual_text.update_active_sign(args.buf)
+          vim.schedule(function()
+            virtual_text.refresh_parsed(args.buf)
+            virtual_text.update_active_sign(args.buf)
+          end)
         end,
       })
 

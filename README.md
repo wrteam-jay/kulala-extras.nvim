@@ -97,6 +97,13 @@ cached parse. Calling `get_document()` once per history key on file open
 was an earlier bug here - it turned opening a file with a handful of
 recorded requests into a multi-second wait.
 
+Parsing is deferred a tick via `vim.schedule()` everywhere it's
+triggered (file open, text change, completed request) - kulala's
+document parser has no public async entry point, so the call itself
+still blocks when it runs, but scheduling it means the buffer displays
+and stays editable first instead of the parse stalling the triggering
+event.
+
 ## Status
 
 Early / personal project, not yet published. Verified against real

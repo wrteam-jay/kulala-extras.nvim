@@ -14,8 +14,14 @@ no forked internals.
 
 - **History** — every response is recorded automatically (timestamp,
   status, headers, body), grouped per request.
-- **Compare** — pick two past responses for the same request and diff them
-  in a native Neovim diff split.
+- **Inline history markers** — the last few runs of a request show up as
+  virtual text right under it in the buffer, JetBrains-style, no separate
+  panel to open.
+- **Compare** — diff two past responses in a native Neovim diff split,
+  with word-level highlighting, a difference count, and JSON syntax
+  highlighting when the response was JSON. `:KulalaExtrasCompareHere`
+  diffs the two latest runs of whatever request the cursor is on in one
+  step; `:KulalaExtrasCompare` is the full picker for anything older.
 
 ## Requirements
 
@@ -48,22 +54,21 @@ require("kulala-extras").setup({
 
 ## Usage
 
-| Command                       | Does                                                |
-| ------------------------------ | ---------------------------------------------------- |
-| `:KulalaExtrasCompare`         | Pick a request, then two past responses, diff them   |
-| `:KulalaExtrasDebugPayload`    | One-shot: print the raw payload of the next response |
+| Command                       | Does                                                       |
+| ------------------------------ | ------------------------------------------------------------ |
+| `:KulalaExtrasCompareHere`    | Diff the 2 latest responses for the request under the cursor |
+| `:KulalaExtrasCompare`        | Full picker: pick a request, then two past responses         |
+| `:KulalaExtrasDebugPayload`   | One-shot: print the raw payload of the next response          |
 
 History is recorded automatically once `setup()` runs — nothing to call
 per request.
 
 ## Status
 
-Early / personal project, not yet published. The exact shape of kulala's
-`after_request` payload (field names for status/url/method/headers/body)
-is not pinned in kulala's docs - `lua/kulala-extras/history.lua`'s
-`request_key()` guesses a fallback chain. Run `:KulalaExtrasDebugPayload`
-once against a real request and adjust `history.lua` if the field names
-printed don't match.
+Early / personal project, not yet published. Verified against real
+requests - the `after_request` payload shape (`response.response_code`
+for HTTP status, `response.status` as a success bool, `response.headers_tbl`
+for structured headers) is now pinned in `lua/kulala-extras/history.lua`.
 
 ## License
 

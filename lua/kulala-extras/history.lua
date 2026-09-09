@@ -6,7 +6,7 @@ local M = {}
 --- @param response table full response record, see kulala's
 ---   lua/kulala/cmd/init.lua (response.url/.method/.name)
 --- @return string
-local function request_key(response)
+function M.key_for(response)
   local url = response.url or "unknown-url"
   local method = response.method or "GET"
   return (method .. " " .. url):gsub("[^%w]", "_")
@@ -50,12 +50,15 @@ end
 ---   is a success boolean, `code` is curl's own exit code - not the same
 ---   thing), `headers_tbl` is the parsed header table, `json` is the
 ---   parsed body when it's JSON.
+--- @return string key, table entry the key this response was filed under,
+---   and the entry that was recorded (both handy for callers like
+---   virtual_text that need to render right after recording)
 function M.record(payload)
   local response = payload.response or payload
-  local key = request_key(response)
+  local key = M.key_for(response)
   local entries = read_history(key)
 
-  table.insert(entries, 1, {
+  local entry = {
     timestamp = os.time(),
     url = response.url,
     method = response.method,
@@ -65,13 +68,18 @@ function M.record(payload)
     headers = response.headers_tbl or response.headers,
     body = response.body,
     json = response.json,
-  })
+    buf = response.buf,
+    line = response.line,
+    name = response.name,
+  }
+  table.insert(entries, 1, entry)
 
   while #entries > config.options.max_history_per_request do
     table.remove(entries)
   end
 
   write_history(key, entries)
+  return key, entry
 end
 
 --- @param key string

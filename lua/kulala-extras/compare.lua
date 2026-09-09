@@ -3,7 +3,7 @@ local history = require("kulala-extras.history")
 local M = {}
 
 --- @param entry table history entry, see history.record()
---- @return string[]
+--- @return string[] lines, boolean is_json
 local function format_entry(entry)
   local lines = {
     ("# %s (status %s)"):format(os.date("%Y-%m-%d %H:%M:%S", entry.timestamp), tostring(entry.status)),
@@ -18,10 +18,36 @@ local function format_entry(entry)
     end
     table.insert(lines, "")
   end
-  for _, line in ipairs(vim.split(entry.body or "", "\n")) do
+
+  -- kulala's `body` is already the response as the server sent it (with
+  -- its own formatting/indentation intact) - diff that directly rather
+  -- than re-serializing `json`, which would just show formatting noise.
+  local is_json = entry.json ~= nil
+  local body = entry.body or ""
+
+  for _, line in ipairs(vim.split(body, "\n")) do
     table.insert(lines, line)
   end
-  return lines
+  return lines, is_json
+end
+
+--- @param lines string[]
+--- @param is_json boolean
+--- @return integer bufnr
+local function make_diff_buf(lines, is_json)
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].filetype = is_json and "json" or "text"
+  return buf
+end
+
+--- @return integer count of diff hunks between two line arrays
+local function count_diff_hunks(lines_a, lines_b)
+  local diff = vim.diff(table.concat(lines_a, "\n") .. "\n", table.concat(lines_b, "\n") .. "\n", {
+    result_type = "indices",
+    algorithm = "histogram",
+  })
+  return diff and #diff or 0
 end
 
 --- Opens a vertical diff split between two history entries for the given key.
@@ -36,17 +62,37 @@ function M.diff(key, index_a, index_b)
     return
   end
 
-  local buf_a = vim.api.nvim_create_buf(false, true)
-  local buf_b = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf_a, 0, -1, false, format_entry(a))
-  vim.api.nvim_buf_set_lines(buf_b, 0, -1, false, format_entry(b))
+  local lines_a, json_a = format_entry(a)
+  local lines_b, json_b = format_entry(b)
+  local buf_a = make_diff_buf(lines_a, json_a)
+  local buf_b = make_diff_buf(lines_b, json_b)
 
   vim.cmd("tabnew")
   vim.api.nvim_win_set_buf(0, buf_a)
+  vim.opt_local.diffopt:append({ "iwhite", "linematch:60" })
   vim.cmd("diffthis")
   vim.cmd("vsplit")
   vim.api.nvim_win_set_buf(0, buf_b)
+  vim.opt_local.diffopt:append({ "iwhite", "linematch:60" })
   vim.cmd("diffthis")
+
+  local hunks = count_diff_hunks(lines_a, lines_b)
+  vim.notify(
+    ("kulala-extras: %d difference%s between the two responses"):format(hunks, hunks == 1 and "" or "s"),
+    vim.log.levels.INFO
+  )
+end
+
+--- Diffs the two most recent responses for a request - the common case,
+--- skipping the "which entries" picker entirely.
+--- @param key string
+function M.diff_latest(key)
+  local entries = history.get(key)
+  if #entries < 2 then
+    vim.notify("kulala-extras: need at least 2 runs of this request to compare", vim.log.levels.WARN)
+    return
+  end
+  M.diff(key, 1, 2)
 end
 
 --- Prompts for a request key then two entry indices via vim.ui.select/input.

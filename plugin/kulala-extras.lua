@@ -5,7 +5,11 @@ vim.g.loaded_kulala_extras = true
 
 vim.api.nvim_create_user_command("KulalaExtrasCompare", function()
   require("kulala-extras.compare").pick_and_diff()
-end, { desc = "Compare two past responses for a request" })
+end, { desc = "Compare two past responses for a request (full picker)" })
+
+vim.api.nvim_create_user_command("KulalaExtrasCompareHere", function()
+  require("kulala-extras.virtual_text").compare_here()
+end, { desc = "One-step: diff the two most recent responses for the request under the cursor" })
 
 -- curl-to-.http import is handled by kulala.nvim itself (require("kulala").from_curl()) -
 -- no need to duplicate that parser here.

@@ -1,5 +1,6 @@
 local config = require("kulala-extras.config")
 local history = require("kulala-extras.history")
+local virtual_text = require("kulala-extras.virtual_text")
 
 local M = {}
 
@@ -15,11 +16,13 @@ function M.setup(opts)
   end
 
   kulala_api.on("after_request", function(payload)
-    history.record(payload)
+    local key, entry = history.record(payload)
+    virtual_text.on_record(key, entry)
   end)
 end
 
 M.history = history
 M.compare = require("kulala-extras.compare")
+M.virtual_text = virtual_text
 
 return M
